@@ -72,25 +72,47 @@
     .error {
       color: #FCA5A5;
     }
+    #friendsFinished {
+      margin-top: 20px;
+      text-align: left;
+      background: rgba(0,0,0,0.2);
+      padding: 10px;
+      border-radius: 10px;
+    }
+    #friendsFinished h3 {
+      margin: 5px 0;
+    }
+    #friendsFinished ul {
+      list-style: none;
+      padding-left: 15px;
+    }
   </style>
 </head>
 <body>
   <div class="container">
     <h1>⏰ Smart Alarm Quiz</h1>
-    <p>Set an alarm that only stops when you <b>and your friend</b> solve 3 quiz questions in a row!</p>
+    <p>Set an alarm that only stops when you <b>and your friends</b> solve 3 quiz questions in a row!</p>
     <input type="time" id="alarmTime">
     <br>
     <button onclick="setAlarm()">Set Alarm</button>
     <button onclick="testAlarm()">Test Alarm</button>
     <button onclick="enableAudio()">Enable Sound</button>
     <p id="status"></p>
+
     <div id="quiz">
       <h3 id="question"></h3>
       <div id="options"></div>
       <p id="feedback"></p>
       <p id="progress"></p>
     </div>
+
+    <!-- Friends finished list -->
+    <div id="friendsFinished">
+      <h3>✅ Friends Finished:</h3>
+      <ul id="finishedList"></ul>
+    </div>
   </div>
+
   <audio id="alarmSound" src="https://actions.google.com/sounds/v1/alarms/alarm_clock.ogg" loop></audio>
   
   <!-- Firebase SDKs -->
@@ -119,10 +141,10 @@
     let alarmTimeout = null;
     let correctStreak = 0;
 
-    // Ask for your username to identify yourself
+    // Ask for user ID
     const userId = prompt("Enter your name or ID (for friend sync):");
 
-    // Step 3: Set Alarm and save to Firebase
+    // Set Alarm
     function setAlarm() {
       const time = document.getElementById("alarmTime").value;
       if (!time) {
@@ -139,7 +161,7 @@
       alarmTimeout = setTimeout(ringAlarm, delay);
       document.getElementById("status").textContent = "⏳ Alarm set for " + alarmTime.toLocaleTimeString();
 
-      // Save alarm to Firebase
+      // Save to Firebase
       db.ref("alarms").push({
         time: time,
         createdAt: new Date().toISOString()
@@ -163,8 +185,7 @@
       alert("✅ Audio enabled! Now the alarm can ring when triggered.");
     }
 
-    // ------------------------------
-    // Step 4: Save your quiz progress
+    // Update quiz progress
     function updateQuizProgress() {
       db.ref("progress/" + userId).set({
         streak: correctStreak,
@@ -172,14 +193,24 @@
       });
     }
 
-    // Step 5: Listen to all friends' progress
+    // Listen to progress and update friends finished list
     db.ref("progress").on("value", snapshot => {
       const data = snapshot.val() || {};
-      console.log("Friends progress:", data);
 
-      // Check if ALL friends have done >=3 correct
+      const finishedList = document.getElementById("finishedList");
+      finishedList.innerHTML = ""; // clear previous list
+
+      Object.entries(data).forEach(([id, info]) => {
+        if (info.done) {
+          const li = document.createElement("li");
+          li.textContent = id;
+          finishedList.appendChild(li);
+        }
+      });
+
+      // Check if all friends done
       const allDone = Object.values(data).every(f => f.done);
-      if (allDone && correctStreak >=3) {
+      if (allDone && correctStreak >= 3) {
         stopAlarm();
       }
     });
@@ -247,7 +278,7 @@
       document.getElementById("alarmSound").pause();
       document.getElementById("alarmSound").currentTime = 0;
       document.getElementById("quiz").style.display = "none";
-      document.getElementById("status").textContent = "✅ Alarm stopped! All friends completed the quiz.";
+      document.getElementById("status").textContent = "✅ Alarm stopped after solving 3 questions!";
     }
   </script>
 </body>
