@@ -25,10 +25,13 @@
       width: 100%;
     }
     h1 {
-      font-size: 2em;
+      font-size: 2.5em;
       margin-bottom: 20px;
+      background: linear-gradient(90deg,#facc15,#f472b6);
+      -webkit-background-clip: text;
+      color: transparent;
     }
-    input, button, select {
+    input, button {
       padding: 10px;
       margin: 8px 0;
       border-radius: 10px;
@@ -63,64 +66,55 @@
       cursor: pointer;
       transition: background 0.3s;
     }
-    .option:hover {
-      background: #3B82F6;
-    }
-    .success {
-      color: #BBF7D0;
-    }
-    .error {
-      color: #FCA5A5;
-    }
-    #friendsFinished {
-      margin-top: 20px;
-      text-align: left;
-      background: rgba(0,0,0,0.2);
-      padding: 10px;
-      border-radius: 10px;
-    }
-    #friendsFinished h3 {
-      margin: 5px 0;
-    }
-    #friendsFinished ul {
-      list-style: none;
-      padding-left: 15px;
-    }
+    .option:hover { background: #3B82F6; }
+    .success { color: #BBF7D0; }
+    .error   { color: #FCA5A5; }
+    #notifications { margin-bottom: 15px; font-size: 1em; text-align: left; }
+    #participants  { margin-bottom: 10px; }
   </style>
 </head>
 <body>
   <div class="container">
-    <h1>⏰ Smart Alarm Quiz</h1>
-    <p>Set an alarm that only stops when you <b>and your friends</b> solve 3 quiz questions in a row!</p>
-    <input type="time" id="alarmTime">
-    <br>
-    <button onclick="setAlarm()">Set Alarm</button>
-    <button onclick="testAlarm()">Test Alarm</button>
-    <button onclick="enableAudio()">Enable Sound</button>
-    <p id="status"></p>
 
-    <div id="quiz">
-      <h3 id="question"></h3>
-      <div id="options"></div>
-      <p id="feedback"></p>
-      <p id="progress"></p>
+    <!-- STEP 1: Mode selection -->
+    <div id="modeScreen">
+      <h1>⏰ Smart Alarm Quiz</h1>
+      <p><b>Set alarm for:</b></p>
+      <label><input type="radio" name="mode" value="solo"> For yourself</label><br>
+      <label><input type="radio" name="mode" value="friends"> With friends</label><br><br>
+      <button onclick="goNext()">Next</button>
     </div>
 
-    <!-- Friends finished list -->
-    <div id="friendsFinished">
-      <h3>✅ Friends Finished:</h3>
-      <ul id="finishedList"></ul>
+    <!-- STEP 2: Alarm interface (hidden until mode chosen) -->
+    <div id="alarmScreen" style="display:none;">
+      <div id="notifications"></div>
+      <h3 id="participants">Participants: </h3>
+
+      <h2>Set Your Alarm</h2>
+      <input type="time" id="alarmTime"><br>
+      <button onclick="setAlarm()">Set Alarm</button>
+      <button onclick="testAlarm()">Test Alarm</button>
+      <button onclick="enableAudio()">Enable Sound</button>
+      <p id="status"></p>
+
+      <div id="quiz">
+        <h3 id="question"></h3>
+        <div id="options"></div>
+        <p id="feedback"></p>
+        <p id="progress"></p>
+      </div>
     </div>
+
   </div>
 
   <audio id="alarmSound" src="https://actions.google.com/sounds/v1/alarms/alarm_clock.ogg" loop></audio>
-  
+
   <!-- Firebase SDKs -->
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
 
   <script>
-    // Your Firebase configuration
+    // Firebase configuration
     const firebaseConfig = {
       apiKey: "AIzaSyCjc4S0LjW59YJ3CMX5X8ynB0mTnYAp_E4",
       authDomain: "smartwake-c93aa.firebaseapp.com",
@@ -131,20 +125,35 @@
       appId: "1:25144860797:web:402614d5f49fe8f0845114"
     };
 
-    // Initialize Firebase
     const app = firebase.initializeApp(firebaseConfig);
-    const db = firebase.database();
-
+    const db  = firebase.database();
     console.log("✅ Firebase connected:", app.name);
 
+    let mode = null;      // "solo" or "friends"
+    let userId = null;    // name only if friends
     let alarmTime = null;
     let alarmTimeout = null;
     let correctStreak = 0;
 
-    // Ask for user ID
-    const userId = prompt("Enter your name or ID (for friend sync):");
+    // Step 1 -> Step 2
+    function goNext() {
+      const selected = document.querySelector('input[name="mode"]:checked');
+      if (!selected) {
+        alert("Please choose an option");
+        return;
+      }
+      mode = selected.value;
+      if (mode === "friends") {
+        userId = prompt("Enter your name or ID (for friend sync):");
+        if (!userId) {
+          alert("Name/ID is required to play with friends!");
+          return;
+        }
+      }
+      document.getElementById("modeScreen").style.display = "none";
+      document.getElementById("alarmScreen").style.display = "block";
+    }
 
-    // Set Alarm
     function setAlarm() {
       const time = document.getElementById("alarmTime").value;
       if (!time) {
@@ -159,60 +168,65 @@
       if (delay < 0) delay += 24 * 60 * 60 * 1000;
       clearTimeout(alarmTimeout);
       alarmTimeout = setTimeout(ringAlarm, delay);
-      document.getElementById("status").textContent = "⏳ Alarm set for " + alarmTime.toLocaleTimeString();
+      document.getElementById("status").textContent =
+        "⏳ Alarm set for " + alarmTime.toLocaleTimeString();
 
-      // Save to Firebase
-      db.ref("alarms").push({
-        time: time,
-        createdAt: new Date().toISOString()
-      });
+      // Save to Firebase only if with friends
+      if (mode === "friends" && userId) {
+        db.ref("alarms").push({
+          time: time,
+          createdAt: new Date().toISOString()
+        });
+      }
     }
 
     function ringAlarm() {
-      document.getElementById("status").textContent = "⏰ Alarm ringing! Solve quizzes to stop it.";
+      document.getElementById("status").textContent =
+        "⏰ Alarm ringing! Solve quizzes to stop it.";
       document.getElementById("alarmSound").play();
       correctStreak = 0;
       fetchQuestion();
+      document.getElementById("participants").textContent = "";
     }
 
-    function testAlarm() {
-      ringAlarm();
-    }
+    function testAlarm() { ringAlarm(); }
 
     function enableAudio() {
-      document.getElementById("alarmSound").play();
-      document.getElementById("alarmSound").pause();
+      const sound = document.getElementById("alarmSound");
+      sound.play(); sound.pause();
       alert("✅ Audio enabled! Now the alarm can ring when triggered.");
     }
 
-    // Update quiz progress
     function updateQuizProgress() {
-      db.ref("progress/" + userId).set({
-        streak: correctStreak,
-        done: correctStreak >= 3
-      });
+      if (mode === "friends" && userId) {
+        db.ref("progress/" + userId).set({
+          streak: correctStreak,
+          done: correctStreak >= 3
+        });
+      }
     }
 
-    // Listen to progress and update friends finished list
+    // Friends progress listener
     db.ref("progress").on("value", snapshot => {
+      if (mode !== "friends" || !userId) return;
       const data = snapshot.val() || {};
 
-      const finishedList = document.getElementById("finishedList");
-      finishedList.innerHTML = ""; // clear previous list
+      const participants = Object.keys(data).join(", ");
+      if (!alarmTime)
+        document.getElementById("participants").textContent =
+          "Participants: " + participants;
 
       Object.entries(data).forEach(([id, info]) => {
-        if (info.done) {
-          const li = document.createElement("li");
-          li.textContent = id;
-          finishedList.appendChild(li);
+        if (info.done && !document.getElementById("notif-" + id)) {
+          const notif = document.createElement("p");
+          notif.id = "notif-" + id;
+          notif.textContent = `🕒 ${id} finished the quiz!`;
+          document.getElementById("notifications").appendChild(notif);
         }
       });
 
-      // Check if all friends done
       const allDone = Object.values(data).every(f => f.done);
-      if (allDone && correctStreak >= 3) {
-        stopAlarm();
-      }
+      if (allDone && correctStreak >= 3) stopAlarm();
     });
 
     // Quiz logic
@@ -220,7 +234,8 @@
       fetch("https://opentdb.com/api.php?amount=1&category=19&type=multiple")
         .then(res => res.json())
         .then(data => {
-          if (data.results && data.results.length > 0) displayQuestion(data.results[0]);
+          if (data.results && data.results.length > 0)
+            displayQuestion(data.results[0]);
           else fallbackQuestion();
         })
         .catch(() => fallbackQuestion());
@@ -241,7 +256,8 @@
     function displayQuestion(q) {
       document.getElementById("quiz").style.display = "block";
       document.getElementById("question").innerHTML = q.question;
-      const options = [...q.incorrect_answers, q.correct_answer].sort(() => Math.random() - 0.5);
+      const options = [...q.incorrect_answers, q.correct_answer]
+                      .sort(() => Math.random() - 0.5);
       const optionsDiv = document.getElementById("options");
       optionsDiv.innerHTML = "";
       options.forEach(opt => {
@@ -252,7 +268,8 @@
         optionsDiv.appendChild(btn);
       });
       document.getElementById("feedback").textContent = "";
-      document.getElementById("progress").textContent = `Correct in a row: ${correctStreak}/3`;
+      document.getElementById("progress").textContent =
+        `Correct in a row: ${correctStreak}/3`;
     }
 
     function checkAnswer(selected, correct) {
@@ -260,7 +277,8 @@
         correctStreak++;
         document.getElementById("feedback").textContent = "✅ Correct!";
         document.getElementById("feedback").className = "success";
-        document.getElementById("progress").textContent = `Correct in a row: ${correctStreak}/3`;
+        document.getElementById("progress").textContent =
+          `Correct in a row: ${correctStreak}/3`;
         updateQuizProgress();
         if (correctStreak >= 3) return;
         setTimeout(fetchQuestion, 1000);
@@ -268,17 +286,19 @@
         correctStreak = 0;
         document.getElementById("feedback").textContent = "❌ Wrong! Streak reset.";
         document.getElementById("feedback").className = "error";
-        document.getElementById("progress").textContent = `Correct in a row: ${correctStreak}/3`;
+        document.getElementById("progress").textContent =
+          `Correct in a row: ${correctStreak}/3`;
         updateQuizProgress();
         setTimeout(fetchQuestion, 1000);
       }
     }
 
     function stopAlarm() {
-      document.getElementById("alarmSound").pause();
-      document.getElementById("alarmSound").currentTime = 0;
+      const sound = document.getElementById("alarmSound");
+      sound.pause(); sound.currentTime = 0;
       document.getElementById("quiz").style.display = "none";
-      document.getElementById("status").textContent = "✅ Alarm stopped after solving 3 questions!";
+      document.getElementById("status").textContent =
+        "✅ Alarm stopped after solving 3 questions!";
     }
   </script>
 </body>
