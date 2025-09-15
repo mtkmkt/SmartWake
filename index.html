@@ -28,7 +28,7 @@
       font-size: 2em;
       margin-bottom: 20px;
     }
-    input, button, select {
+    input, button {
       padding: 10px;
       margin: 8px 0;
       border-radius: 10px;
@@ -68,7 +68,6 @@
     }
     .success { color: #BBF7D0; }
     .error { color: #FCA5A5; }
-    #notifications { margin-bottom: 15px; font-size: 1em; text-align: left; }
     #participants { margin-bottom: 10px; }
   </style>
 </head>
@@ -85,7 +84,6 @@
 
     <!-- Alarm/quiz screen -->
     <div id="alarmScreen" style="display:none;">
-      <div id="notifications"></div>
       <h3 id="participants"></h3>
 
       <h1>⏰ Smart Alarm Quiz</h1>
@@ -174,7 +172,6 @@
       document.getElementById("alarmSound").play();
       correctStreak = 0;
       fetchQuestion();
-
       if(mode === "friends"){
         document.getElementById("participants").textContent = "";
       }
@@ -188,7 +185,6 @@
       alert("✅ Audio enabled!");
     }
 
-    // update progress only in friend mode
     function updateQuizProgress(){
       if(mode !== "friends") return;
       db.ref("progress/" + userId).set({
@@ -197,30 +193,19 @@
       });
     }
 
-    if(true){ // Listen only if friend mode
-      db.ref("progress").on("value", snap => {
-        if(mode !== "friends") return; // ignore if self mode
-        const data = snap.val() || {};
-        const participants = Object.keys(data).join(", ");
-        if(!alarmTime) document.getElementById("participants").textContent =
-            "Participants: " + participants;
+    // Listen only for participant list & all-done stopping logic
+    db.ref("progress").on("value", snap => {
+      if(mode !== "friends") return;
+      const data = snap.val() || {};
+      const participants = Object.keys(data).join(", ");
+      if(!alarmTime) document.getElementById("participants").textContent =
+          "Participants: " + participants;
 
-        // ✅ Only show finish message when done becomes true AND not already shown
-        Object.entries(data).forEach(([id, info]) => {
-          if (info.done === true && !document.getElementById("notif-" + id)) {
-            const notif = document.createElement("p");
-            notif.id = "notif-" + id;
-            notif.textContent = `🕒 ${id} finished the quiz!`;
-            document.getElementById("notifications").appendChild(notif);
-          }
-        });
-
-        // stop alarm if all done
-        const allDone = Object.values(data).length>0 &&
-                        Object.values(data).every(f => f.done);
-        if(allDone && correctStreak >= 3) stopAlarm();
-      });
-    }
+      // Stop alarm if all done
+      const allDone = Object.values(data).length>0 &&
+                      Object.values(data).every(f => f.done);
+      if(allDone && correctStreak >= 3) stopAlarm();
+    });
 
     // Quiz logic
     function fetchQuestion(){
